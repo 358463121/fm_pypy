@@ -14,12 +14,17 @@ import sys
 
 seed(1024)
 
-def data_generator(path,no_norm=False,task='c'):
+
+
+def data_generator(path,no_norm=False,task='c'): #读取svm数据的函数
     data = open(path,'r')
     for row in data:
-        row = row.strip().split(" ")
-        y = float(row[0])
-        row = row[1:]
+#s.strip(rm)        删除s字符串中开头、结尾处，位于 rm删除序列的字符
+#s.lstrip(rm)       删除s字符串中开头处，位于 rm删除序列的字符 
+#s.rstrip(rm)      删除s字符串中结尾处，位于 rm删除序列的字符
+        row = row.strip().split(" ") #删除头尾的空白奇怪字符，然后再用空格划分
+        y = float(row[0]) #第一列是label
+        row = row[1:] #表示去除第一列，取后面的列
         x = []
         for feature in row:
             feature = feature.split(":")
@@ -37,10 +42,11 @@ def data_generator(path,no_norm=False,task='c'):
             if y ==0.0:
                 y = -1.0
 
-        yield x,y
+        yield x,y #返回一个生产器对象，可以进行迭代，也就是data_generator可以用作for里面进行迭代，for x,y in data_generator 然后逐行处理x,y的值，从而不需要把数据一次性全部加载进内存。
+        
 
 
-def dot(u,v):
+def dot(u,v): #向量点乘
     u_v = 0.
     len_u = len(u)
     for idx in range(len_u):
@@ -69,7 +75,19 @@ def sigmoid(inX):
 def bounded_sigmoid(inX):
     return 1. / (1. + exp(-max(min(inX, 35.), -35.)))
 
-
+#lr: learning rate
+#momentum: momentum of sgd
+#nesterov: using nesterov momentum or not
+#adam: using adam as optimizer
+#dropout: dropout rate
+#l2: l2 norm for linear weights
+#l2_fm: l2 norm for latent weights
+#l2_bias: l2 norm for bias 
+#task: 'r' for regression, 'c' for classification
+#n_components: dimension of latent
+#nb_epoch: rounds to train
+#interaction: is set to False, it becomes a normal glm
+#no_norm: normalize inputs or not,default True
 class SGD(object):
     def __init__(self,lr=0.001,momentum=0.9,nesterov=True,adam=False,l2=0.0,l2_fm=0.0,l2_bias=0.0,ini_stdev= 0.01,dropout=0.5,task='c',n_components=4,nb_epoch=5,interaction=False,no_norm=False):
         self.W = []
@@ -91,20 +109,20 @@ class SGD(object):
         self.no_norm = no_norm
         if self.task!='c':
             # self.loss_function = mse_loss_function
-            self.loss_function = mae_loss_function
+            self.loss_function = mae_loss_function #如果任务是分类则使用mae loss
         else:
-            self.loss_function = exponential_loss_function
+            self.loss_function = exponential_loss_function #如果任务是回归则使用exponential loss
             # self.loss_function = log_loss_function
 
     def preload(self,train,test):
-        train = data_generator(train,self.no_norm,self.task)
+        train = data_generator(train,self.no_norm,self.task) #产生一个数据生成器
         dim = 0
         count = 0
         for x,y in train:
-            for i in x:
-                idx,value = i
+            for i in x: 
+                idx,value = i #x是一个个对的数组[[1,1],[1,2]]所以i的值就是x的其中一个对比如说[1,1]
                 if idx >dim:
-                    dim = idx
+                    dim = idx  #动态更新数据最大维度
             count+=1
         print('Training samples:',count)
         test = data_generator(test,self.no_norm,self.task)
@@ -120,11 +138,11 @@ class SGD(object):
         dim = dim+1
         print("Number of features:",dim)
 
-        self.W = [uniform(-self.ini_stdev, self.ini_stdev) for _ in range(dim)]
+        self.W = [uniform(-self.ini_stdev, self.ini_stdev) for _ in range(dim)]#W是前dim个一阶的参数 ，没交互项
         self.Velocity_W = [0.0 for _ in range(dim)]
         
 
-        self.V = [[uniform(-self.ini_stdev, self.ini_stdev) for _ in range(self.n_components)] for _ in range(dim)]
+        self.V = [[uniform(-self.ini_stdev, self.ini_stdev) for _ in range(self.n_components)] for _ in range(dim)] #V是由交互项的参数，n_components表示矩阵分解后矩阵的维度,即二阶交互项用V*V^T这个矩阵来表示
         self.Velocity_V = [[0.0 for _ in range(self.n_components)] for _ in range(dim)]
 
         self.Velocity_bias = 0.0
@@ -384,9 +402,9 @@ class SGD(object):
                 self.update(lr,x,residual)
                 if train_count%50000==0:
                     if train_count ==0:
-                        print '\ttrain_count: %s, current loss: %.6f'%(train_count,0.0)
+                        print('\ttrain_count: %s, current loss: %.6f'%(train_count,0.0))
                     else:
-                        print '\ttrain_count: %s, current loss: %.6f'%(train_count,train_loss/train_count)
+                        print('\ttrain_count: %s, current loss: %.6f'%(train_count,train_loss/train_count))
 
                 train_loss += self.loss_function(y,p)
                 train_count += 1
@@ -400,7 +418,7 @@ class SGD(object):
                 if valid_loss<best_loss:
                     best_loss = valid_loss
                     self.save_weights()
-                    print 'save_weights'
+                    print( 'save_weights')
             else:
                 print('Epoch: %s, train loss: %.6f, time: %s'%(epoch,train_loss/train_count,duration))
 
@@ -414,6 +432,6 @@ ploy3 best round 63 lr = 0.002,adam = True
 sgd = SGD(lr=0.002,momentum=0.9,adam=True,nesterov=True,dropout=0.3,l2=0.0,l2_fm=0.0,task='r',n_components=4,nb_epoch=63,interaction=True,no_norm=False)# local 513834
 sgd.preload(path+'X_cat_oh_high_order.svm',path+'X_t_cat_oh_high_order.svm')
 # sgd.load_weights()
-sgd.train(path+'X_train_cat_oh_high_order.svm',path+'X_test_cat_oh_high_order.svm',in_memory=False)
+sgd.train(path+'X_train_cat_oh_high_order.svm',path+'X_test_cat_oh_high_order.svm',in_memory=True)
 sgd.predict(path+'X_test_cat_oh_high_order.svm',out='valid.csv')
 sgd.predict(path+'X_t_cat_oh_high_order.svm',out='out.csv')
